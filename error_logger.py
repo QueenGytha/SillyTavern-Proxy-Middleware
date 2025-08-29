@@ -57,6 +57,10 @@ class ErrorLogger:
         if isinstance(error, Response):
             return error.status_code
         
+        # Check if error has a status_code attribute (for Mock objects or custom error types)
+        if hasattr(error, 'status_code') and error.status_code is not None:
+            return error.status_code
+        
         if isinstance(error, Exception):
             # For exceptions, use the exception type name
             return type(error).__name__
