@@ -66,6 +66,18 @@ regex_replacement:
       replacement: "&apos;"
       flags: ""
       apply_to: "all"
+    
+    # Escape square brackets to prevent downstream proxy parsing issues
+    - pattern: "["
+      replacement: "\\["
+      flags: ""
+      apply_to: "all"
+    
+    # Escape closing square brackets to prevent downstream proxy parsing issues
+    - pattern: "]"
+      replacement: "\\]"
+      flags: ""
+      apply_to: "all"
 
 error_handling:
   # HTTP status codes that should trigger retries (server errors and transient client errors)
