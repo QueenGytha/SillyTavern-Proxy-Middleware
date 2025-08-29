@@ -51,8 +51,12 @@ def forward_request(request_data: Dict[str, Any], headers: Optional[Dict[str, st
         base_delay = error_config.get("base_delay", 1.0)
         max_delay = error_config.get("max_delay", 60.0)
         
+        # Get hard stop configuration
+        hard_stop_config = error_config.get("hard_stop_conditions", {})
+        
         # Create error handler with configuration and error logger
-        error_handler = ErrorHandler(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay, error_logger=error_logger)
+        error_handler = ErrorHandler(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay, 
+                                   error_logger=error_logger, hard_stop_config=hard_stop_config)
         
         # Create proxy client
         proxy_client = ProxyClient(target_url, config=config)
@@ -182,7 +186,11 @@ def models():
             base_delay = error_config.get("base_delay", 1.0)
             max_delay = error_config.get("max_delay", 60.0)
             
-            models_error_handler = ErrorHandler(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay, error_logger=error_logger)
+            # Get hard stop configuration
+            hard_stop_config = error_config.get("hard_stop_conditions", {})
+            
+            models_error_handler = ErrorHandler(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay, 
+                                             error_logger=error_logger, hard_stop_config=hard_stop_config)
             
             # Define the models request function
             def make_models_request():

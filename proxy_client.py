@@ -1,6 +1,7 @@
 import requests
 import json
 import logging
+import re
 from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 
@@ -147,6 +148,19 @@ class ProxyClient:
             logger.error(f"HTTP error: {response.status_code}")
             logger.error(f"Error response text: {response.text}")
             
+            # Check for hard stop conditions before recategorization
+            if self.config and hasattr(self.config, 'get_error_handling_config'):
+                error_config = self.config.get_error_handling_config()
+                hard_stop_config = error_config.get("hard_stop_conditions", {})
+                if hard_stop_config.get("enabled", False):
+                    hard_stop_rules = hard_stop_config.get("rules", [])
+                    for rule in hard_stop_rules:
+                        pattern = rule.get('pattern', '')
+                        if pattern and re.search(pattern, response.text, re.IGNORECASE):
+                            logger.warning(f"Hard stop condition matched in proxy client: {rule.get('description', 'Unknown')}")
+                            # Return formatted response instead of raising error
+                            return self._format_hard_stop_response(response, rule)
+            
             # Parse response and recategorize status for non-200 responses too
             if self.response_parser:
                 new_status, parsing_info = self.response_parser.parse_and_recategorize(response.text, response.status_code)
@@ -198,3 +212,35 @@ class ProxyClient:
             if hasattr(self, 'error_logger') and self.error_logger:
                 self.error_logger.log_error(e, {"context": "blank_response_check", "response_json": str(response_json)[:500]})
             return False
+    
+    def _format_hard_stop_response(self, response, hard_stop_rule: Dict[str, Any]) -> Dict[str, Any]:
+        """Format response with hard stop user message in OpenAI-compatible format"""
+        # Get the user message if configured
+        user_message = ""
+        if hard_stop_rule.get('add_user_message', False):
+            user_message = hard_stop_rule.get('user_message', '')
+        
+        # Create OpenAI-compatible error response
+        error_response = {
+            "error": {
+                "message": user_message if user_message else "Request failed due to downstream provider error",
+                "type": "hard_stop_error",
+                "code": "hard_stop_condition_met"
+            }
+        }
+        
+        # Add original error details for debugging if available
+        if hasattr(response, 'text'):
+            try:
+                original_response = json.loads(response.text)
+                if 'error' in original_response:
+                    if isinstance(original_response['error'], dict):
+                        error_response["error"]["original_error"] = original_response['error']
+                    else:
+                        error_response["error"]["original_error"] = {"message": original_response['error']}
+                if 'proxy_note' in original_response:
+                    error_response["error"]["proxy_note"] = original_response['proxy_note']
+            except json.JSONDecodeError:
+                error_response["error"]["original_error"] = {"message": response.text}
+        
+        return error_response

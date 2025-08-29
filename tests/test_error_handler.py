@@ -451,3 +451,170 @@ class TestErrorHandler:
         # timeout = error_handler.calculate_timeout(2)  # Second retry
         # assert timeout > error_handler.base_timeout
         assert True  # Placeholder
+
+    def test_hard_stop_condition_matching(self):
+        """Test hard stop condition matching with googleAIBlockingResponseHandler error"""
+        # Configure hard stop conditions
+        hard_stop_config = {
+            "enabled": True,
+            "rules": [
+                {
+                    "pattern": "googleAIBlockingResponseHandler.*Cannot read properties of undefined",
+                    "description": "Downstream proxy middleware failure due to malformed message content",
+                    "user_message": "Your previous message contains characters or formatting that is breaking the downstream AI provider. Please check for special characters, unusual formatting, or try rephrasing your message. You may need to avoid certain punctuation or symbols.",
+                    "preserve_original_response": True,
+                    "add_user_message": True
+                }
+            ]
+        }
+        
+        error_handler = ErrorHandler(hard_stop_config=hard_stop_config)
+        
+        # Create mock response with the specific error
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = '{"error":"Internal server error","proxy_note":"Error while executing proxy response middleware: googleAIBlockingResponseHandler (Cannot read properties of undefined (reading \'0\'))"}'
+        
+        # Test that hard stop condition is detected
+        hard_stop_rule = error_handler.check_hard_stop_conditions(mock_response)
+        assert hard_stop_rule is not None
+        assert hard_stop_rule["description"] == "Downstream proxy middleware failure due to malformed message content"
+        
+        # Test that should_retry returns False for hard stop conditions
+        should_retry = error_handler.should_retry(mock_response)
+        assert should_retry is False
+
+    def test_hard_stop_response_formatting(self):
+        """Test hard stop response formatting with user message"""
+        hard_stop_config = {
+            "enabled": True,
+            "rules": [
+                {
+                    "pattern": "googleAIBlockingResponseHandler.*Cannot read properties of undefined",
+                    "description": "Downstream proxy middleware failure due to malformed message content",
+                    "user_message": "Your previous message contains characters or formatting that is breaking the downstream AI provider. Please check for special characters, unusual formatting, or try rephrasing your message. You may need to avoid certain punctuation or symbols.",
+                    "preserve_original_response": True,
+                    "add_user_message": True
+                }
+            ]
+        }
+        
+        error_handler = ErrorHandler(hard_stop_config=hard_stop_config)
+        
+        # Create mock response
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = '{"error":"Internal server error","proxy_note":"Error while executing proxy response middleware: googleAIBlockingResponseHandler (Cannot read properties of undefined (reading \'0\'))"}'
+        
+        # Get the hard stop rule
+        hard_stop_rule = error_handler.check_hard_stop_conditions(mock_response)
+        
+        # Format the response
+        formatted_response = error_handler.format_hard_stop_response(mock_response, hard_stop_rule)
+        
+        # Verify the response contains the user message in OpenAI-compatible format
+        assert "error" in formatted_response
+        assert "Your previous message contains characters or formatting" in formatted_response["error"]["message"]
+        assert formatted_response["error"]["type"] == "hard_stop_error"
+        assert formatted_response["error"]["code"] == "hard_stop_condition_met"
+        assert "original_error" in formatted_response["error"]
+        assert "proxy_note" in formatted_response["error"]
+
+    def test_hard_stop_retry_logic_integration(self):
+        """Test that hard stop conditions prevent retries in retry logic"""
+        hard_stop_config = {
+            "enabled": True,
+            "rules": [
+                {
+                    "pattern": "googleAIBlockingResponseHandler.*Cannot read properties of undefined",
+                    "description": "Downstream proxy middleware failure due to malformed message content",
+                    "user_message": "Your previous message contains characters or formatting that is breaking the downstream AI provider. Please check for special characters, unusual formatting, or try rephrasing your message. You may need to avoid certain punctuation or symbols.",
+                    "preserve_original_response": True,
+                    "add_user_message": True
+                }
+            ]
+        }
+        
+        error_handler = ErrorHandler(hard_stop_config=hard_stop_config)
+        
+        call_count = 0
+        
+        def mock_function():
+            nonlocal call_count
+            call_count += 1
+            # Simulate the specific error response
+            response = Mock()
+            response.status_code = 500
+            response.text = '{"error":"Internal server error","proxy_note":"Error while executing proxy response middleware: googleAIBlockingResponseHandler (Cannot read properties of undefined (reading \'0\'))"}'
+            raise HTTPError("500 Internal Server Error", response=response)
+        
+        # Test that retry_with_conditional_logic returns formatted response instead of retrying
+        result = error_handler.retry_with_conditional_logic(mock_function)
+        
+        # Should only be called once (no retries)
+        assert call_count == 1
+        
+        # Should return formatted response with user message
+        assert "error" in result
+        assert "Your previous message contains characters or formatting" in result["error"]["message"]
+        assert result["error"]["type"] == "hard_stop_error"
+
+    def test_hard_stop_disabled(self):
+        """Test that hard stop conditions are ignored when disabled"""
+        hard_stop_config = {
+            "enabled": False,  # Disabled
+            "rules": [
+                {
+                    "pattern": "googleAIBlockingResponseHandler.*Cannot read properties of undefined",
+                    "description": "Downstream proxy middleware failure due to malformed message content",
+                    "user_message": "Your previous message contains characters or formatting that is breaking the downstream AI provider. Please check for special characters, unusual formatting, or try rephrasing your message. You may need to avoid certain punctuation or symbols.",
+                    "preserve_original_response": True,
+                    "add_user_message": True
+                }
+            ]
+        }
+        
+        error_handler = ErrorHandler(hard_stop_config=hard_stop_config)
+        
+        # Create mock response with the specific error
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = '{"error":"Internal server error","proxy_note":"Error while executing proxy response middleware: googleAIBlockingResponseHandler (Cannot read properties of undefined (reading \'0\'))"}'
+        
+        # Test that hard stop condition is NOT detected when disabled
+        hard_stop_rule = error_handler.check_hard_stop_conditions(mock_response)
+        assert hard_stop_rule is None
+        
+        # Test that should_retry returns True (normal retry behavior)
+        should_retry = error_handler.should_retry(mock_response)
+        assert should_retry is True
+
+    def test_hard_stop_pattern_mismatch(self):
+        """Test that hard stop conditions don't match when pattern doesn't match"""
+        hard_stop_config = {
+            "enabled": True,
+            "rules": [
+                {
+                    "pattern": "googleAIBlockingResponseHandler.*Cannot read properties of undefined",
+                    "description": "Downstream proxy middleware failure due to malformed message content",
+                    "user_message": "Your previous message contains characters or formatting that is breaking the downstream AI provider. Please check for special characters, unusual formatting, or try rephrasing your message. You may need to avoid certain punctuation or symbols.",
+                    "preserve_original_response": True,
+                    "add_user_message": True
+                }
+            ]
+        }
+        
+        error_handler = ErrorHandler(hard_stop_config=hard_stop_config)
+        
+        # Create mock response with different error
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = '{"error":"Internal server error","proxy_note":"Some other error message"}'
+        
+        # Test that hard stop condition is NOT detected
+        hard_stop_rule = error_handler.check_hard_stop_conditions(mock_response)
+        assert hard_stop_rule is None
+        
+        # Test that should_retry returns True (normal retry behavior)
+        should_retry = error_handler.should_retry(mock_response)
+        assert should_retry is True

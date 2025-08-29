@@ -4,6 +4,7 @@ import logging
 import socket
 import ssl
 import json
+import re
 from typing import Callable, Any, Dict, List, Optional
 from requests.exceptions import (
     RequestException, Timeout, ConnectionError, HTTPError,
@@ -22,7 +23,7 @@ class ErrorHandler:
     """Error handling and retry logic for the proxy middleware"""
     
     def __init__(self, max_retries: int = 10, base_delay: float = 1.0, max_delay: float = 60.0, 
-                 error_logger=None):
+                 error_logger=None, hard_stop_config=None):
         """Initialize error handler with retry settings"""
         self.max_retries = max_retries
         self.base_delay = base_delay
@@ -30,7 +31,7 @@ class ErrorHandler:
         self.error_logger = error_logger
         
         # Extended retry codes for future-proofing
-        self.retry_codes = [429, 502, 503, 504, 505, 507, 508, 511, 408, 409, 410, 423, 424, 425, 426, 428, 431, 451]
+        self.retry_codes = [429, 500, 502, 503, 504, 505, 507, 508, 511, 408, 409, 410, 423, 424, 425, 426, 428, 431, 451]
         
         # Extended fail codes for client errors
         self.fail_codes = [400, 401, 403, 405, 406, 407, 411, 412, 413, 414, 415, 416, 417, 418, 421, 422]
@@ -42,9 +43,73 @@ class ErrorHandler:
         self.conditional_retry_enabled = True
         self.conditional_retry_max_attempts = 2
         self.conditional_retry_delay_multiplier = 0.5
+        
+        # Hard stop configuration
+        self.hard_stop_config = hard_stop_config or {}
+        self.hard_stop_enabled = self.hard_stop_config.get('enabled', False)
+        self.hard_stop_rules = self.hard_stop_config.get('rules', [])
+    
+    def check_hard_stop_conditions(self, response) -> Optional[Dict[str, Any]]:
+        """Check if response matches any hard stop conditions"""
+        if not self.hard_stop_enabled or not self.hard_stop_rules:
+            return None
+        
+        # Get response text for pattern matching
+        response_text = ""
+        if hasattr(response, 'text'):
+            response_text = response.text
+        elif hasattr(response, 'content'):
+            response_text = response.content.decode('utf-8', errors='ignore')
+        
+        # Check each hard stop rule
+        for rule in self.hard_stop_rules:
+            pattern = rule.get('pattern', '')
+            if pattern and re.search(pattern, response_text, re.IGNORECASE):
+                logger.warning(f"Hard stop condition matched: {rule.get('description', 'Unknown')}")
+                return rule
+        
+        return None
+    
+    def format_hard_stop_response(self, response, hard_stop_rule: Dict[str, Any]) -> Dict[str, Any]:
+        """Format response with hard stop user message in OpenAI-compatible format"""
+        # Get the user message if configured
+        user_message = ""
+        if hard_stop_rule.get('add_user_message', False):
+            user_message = hard_stop_rule.get('user_message', '')
+        
+        # Create OpenAI-compatible error response
+        error_response = {
+            "error": {
+                "message": user_message if user_message else "Request failed due to downstream provider error",
+                "type": "hard_stop_error",
+                "code": "hard_stop_condition_met"
+            }
+        }
+        
+        # Add original error details for debugging if available
+        if hasattr(response, 'text'):
+            try:
+                original_response = json.loads(response.text)
+                if 'error' in original_response:
+                    if isinstance(original_response['error'], dict):
+                        error_response["error"]["original_error"] = original_response['error']
+                    else:
+                        error_response["error"]["original_error"] = {"message": original_response['error']}
+                if 'proxy_note' in original_response:
+                    error_response["error"]["proxy_note"] = original_response['proxy_note']
+            except json.JSONDecodeError:
+                error_response["error"]["original_error"] = {"message": response.text}
+        
+        return error_response
     
     def should_retry(self, response) -> bool:
         """Determine if a response should be retried"""
+        # Check hard stop conditions first
+        hard_stop_rule = self.check_hard_stop_conditions(response)
+        if hard_stop_rule:
+            logger.info("Hard stop condition matched - no retry")
+            return False
+        
         if hasattr(response, 'status_code'):
             return response.status_code in self.retry_codes
         return False
@@ -195,6 +260,14 @@ class ErrorHandler:
                     # Log error if error logger is available
                     if self.error_logger:
                         self.error_logger.log_error(e, context, retry_attempt=attempt)
+                    
+                    # Check hard stop conditions first
+                    hard_stop_rule = self.check_hard_stop_conditions(e.response)
+                    if hard_stop_rule:
+                        logger.warning(f"Hard stop condition matched for HTTP {status_code}: {hard_stop_rule.get('description', 'Unknown')}")
+                        # Format response with user message and return it
+                        formatted_response = self.format_hard_stop_response(e.response, hard_stop_rule)
+                        return formatted_response
                     
                     # Check if this is a permanent failure
                     if self.is_permanent_failure(e.response):
