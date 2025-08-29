@@ -1,0 +1,112 @@
+# Example configuration for SillyTavern Proxy Middleware
+# Copy this file to config.yaml and update with your actual settings
+# 
+# IMPORTANT: This is an example configuration. Replace placeholder values
+# with your actual settings, but NEVER commit your actual config.yaml
+# file as it may contain sensitive information like API keys.
+
+target_proxy:
+  url: "https://your-target-proxy.com/chat/completions"
+  timeout: 30
+
+# Regex replacement rules applied to messages before forwarding to remote proxy
+regex_replacement:
+  enabled: true
+  rules:
+    # Example: Replace "hello" with "hi" in user messages only
+    - pattern: "hello"
+      replacement: "hi"
+      flags: "i"  # case insensitive
+      apply_to: "user"  # apply only to user messages
+    
+    # Example: Remove swear words from all messages
+    - pattern: "\\b(bad_word1|bad_word2|swear_word)\\b"
+      replacement: "[REDACTED]"
+      flags: "i"
+      apply_to: "all"
+    
+    # Example: Replace email addresses with [EMAIL] placeholder
+    - pattern: "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"
+      replacement: "[EMAIL]"
+      flags: ""
+      apply_to: "user"
+    
+    # Example: Replace phone numbers with [PHONE] placeholder
+    - pattern: "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b"
+      replacement: "[PHONE]"
+      flags: ""
+      apply_to: "all"
+    
+    # Example: Replace credit card numbers with [CARD] placeholder
+    - pattern: "\\b\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}\\b"
+      replacement: "[CARD]"
+      flags: ""
+      apply_to: "all"
+    
+    # Convert regular hyphens to em dashes to avoid downstream proxy parsing issues
+    - pattern: "\\b(\\w+)-(\\w+)\\b"
+      replacement: "$1—$2"
+      flags: ""
+      apply_to: "all"
+    
+    # Handle single quotes by converting to HTML entities to avoid parsing issues
+    - pattern: "'"
+      replacement: "&apos;"
+      flags: ""
+      apply_to: "all"
+    
+    # Handle curly single quotes (right single quotation mark)
+    - pattern: "'"
+      replacement: "&apos;"
+      flags: ""
+      apply_to: "all"
+    
+    # Handle curly single quotes (left single quotation mark)
+    - pattern: "'"
+      replacement: "&apos;"
+      flags: ""
+      apply_to: "all"
+
+error_handling:
+  # HTTP status codes that should trigger retries (server errors and transient client errors)
+  retry_codes: [429, 502, 503, 504, 505, 507, 508, 511, 408, 409, 410, 423, 424, 425, 426, 428, 431, 451]
+  
+  # HTTP status codes that should fail immediately (permanent client errors)
+  fail_codes: [400, 401, 403, 405, 406, 407, 411, 412, 413, 414, 415, 416, 417, 418, 421, 422]
+  
+  # HTTP status codes that might be retryable depending on context (conditional retry)
+  conditional_retry_codes: [404, 411, 412, 413, 414, 416, 417, 418, 421, 423, 424, 425, 426, 428, 431, 451]
+  
+  # Retry settings
+  max_retries: 10
+  base_delay: 1
+  max_delay: 60
+  
+  # Conditional retry settings
+  conditional_retry_enabled: true
+  conditional_retry_max_attempts: 2
+  conditional_retry_delay_multiplier: 0.5  # Shorter delays for conditional retries
+
+
+
+server:
+  host: "0.0.0.0"
+  port: 8765
+  debug: false
+
+logging:
+  enabled: true
+  folder: "logs"
+  include_request_data: true
+  include_response_data: true
+  include_headers: true
+  include_timing: true
+
+error_logging:
+  enabled: true
+  folder: "logs/errors"
+  include_stack_traces: true
+  include_request_context: true
+  include_timing: true
+  max_file_size_mb: 10
+  max_files: 100
