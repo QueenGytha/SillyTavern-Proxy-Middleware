@@ -210,6 +210,138 @@ class TestResponseProcessing(unittest.TestCase):
         self.assertIn("\"", content2)
         self.assertEqual(content1, "First choice with full—lipped")
         self.assertEqual(content2, "Second choice with \"quotes\"")
+    
+    def test_process_response_with_regex_literal_garbled_characters(self):
+        """Test response processing with literal garbled characters (â€")"""
+        response_data = {
+            "id": "test-123",
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "Her eyesâ€\"the color of a winter sky"
+                    },
+                    "finish_reason": "stop",
+                    "index": 0
+                }
+            ]
+        }
+        
+        rules = [
+            {
+                "pattern": "â€\"",
+                "replacement": "—",
+                "flags": "",
+                "description": "Fix literal display of malformed em dash encoding"
+            }
+        ]
+        
+        result = process_response_with_regex(response_data, rules)
+        
+        content = result["choices"][0]["message"]["content"]
+        self.assertIn("—", content)
+        self.assertNotIn("â€\"", content)
+        self.assertEqual(content, "Her eyes—the color of a winter sky")
+    
+    def test_process_response_with_regex_specific_unicode_pattern(self):
+        """Test the specific Unicode pattern we found in logs (\u00e2\u20ac")"""
+        response_data = {
+            "id": "test-123",
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "full\u00e2\u20ac\"lipped bow"
+                    },
+                    "finish_reason": "stop",
+                    "index": 0
+                }
+            ]
+        }
+        
+        rules = [
+            {
+                "pattern": "\\u00e2\\u20ac\"",
+                "replacement": "—",
+                "flags": "",
+                "description": "Fix Unicode escape sequence for malformed em dash"
+            }
+        ]
+        
+        result = process_response_with_regex(response_data, rules)
+        
+        content = result["choices"][0]["message"]["content"]
+        self.assertIn("—", content)
+        self.assertNotIn("\\u00e2\\u20ac\"", content)
+        self.assertEqual(content, "full—lipped bow")
+    
+    def test_process_response_with_regex_comprehensive_unicode_fixes(self):
+        """Test comprehensive Unicode fixes covering all patterns we identified"""
+        response_data = {
+            "id": "test-123",
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "She had a full\u00e2\u20ac\"lipped smile, wore a \u00e2\u20ac\u009cquoted\u00e2\u20ac\u009d dress, and said \u00e2\u20ac\u0098hello\u00e2\u20ac\u0099"
+                    },
+                    "finish_reason": "stop",
+                    "index": 0
+                }
+            ]
+        }
+        
+        rules = [
+            # Malformed Unicode escape sequences
+            {
+                "pattern": "\\u00e2\\u20ac\"",
+                "replacement": "—",
+                "flags": "",
+                "description": "Fix Unicode escape sequence for malformed em dash"
+            },
+            {
+                "pattern": "\\u00e2\\u20ac\\u009c",
+                "replacement": "\"",
+                "flags": "",
+                "description": "Fix Unicode escape sequence for malformed left double quote"
+            },
+            {
+                "pattern": "\\u00e2\\u20ac\\u009d",
+                "replacement": "\"",
+                "flags": "",
+                "description": "Fix Unicode escape sequence for malformed right double quote"
+            },
+            {
+                "pattern": "\\u00e2\\u20ac\\u0098",
+                "replacement": "'",
+                "flags": "",
+                "description": "Fix Unicode escape sequence for malformed left single quote"
+            },
+            {
+                "pattern": "\\u00e2\\u20ac\\u0099",
+                "replacement": "'",
+                "flags": "",
+                "description": "Fix Unicode escape sequence for malformed right single quote"
+            }
+        ]
+        
+        result = process_response_with_regex(response_data, rules)
+        
+        content = result["choices"][0]["message"]["content"]
+        self.assertIn("—", content)
+        self.assertIn("\"", content)
+        self.assertIn("\"", content)
+        self.assertIn("'", content)
+        self.assertIn("'", content)
+        self.assertNotIn("\\u00e2\\u20ac\"", content)
+        self.assertNotIn("\\u00e2\\u20ac\\u201c", content)
+        self.assertNotIn("\\u00e2\\u20ac\\u201d", content)
+        self.assertNotIn("\\u00e2\\u20ac\\u2018", content)
+        self.assertNotIn("\\u00e2\\u20ac\\u2019", content)
+        self.assertEqual(content, "She had a full—lipped smile, wore a \"quoted\" dress, and said 'hello'")
 
 
 if __name__ == "__main__":
