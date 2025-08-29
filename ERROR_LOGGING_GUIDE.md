@@ -2,7 +2,7 @@
 
 ## Overview
 
-The seaking-proxy project now has comprehensive error logging that ensures **every kind of error and retry is logged to the `/logs/errors` subfolder**. This system provides detailed error tracking, debugging capabilities, and operational insights.
+The first-hop-proxy project now has comprehensive error logging that ensures **every kind of error and retry is logged to the `/logs/errors` subfolder**. This system provides detailed error tracking, debugging capabilities, and operational insights.
 
 ## Configuration
 
@@ -77,21 +77,78 @@ error_logger.log_retry_attempt(error, attempt=1, delay=2.5, context={})
 error_logger.log_final_error(error, total_attempts=3, context={})
 ```
 
+### 5. Conditional Retry Logging
+**Location**: `error_handler.py` - Conditional retry methods
+**Triggers**: When conditional retry logic is executed
+**Log File**: `{ErrorType}_{timestamp}.log` (with conditional retry metadata)
 
+```python
+# Automatically logs during conditional retry operations
+error_handler.retry_with_backoff(function, context)
+```
 
-### 6. Error Handler Integration
+### 6. Hard Stop Condition Logging
+**Location**: `error_handler.py` - Hard stop condition methods
+**Triggers**: When hard stop conditions are matched
+**Log File**: `{ErrorType}_{timestamp}.log` (with hard stop metadata)
+
+```python
+# Automatically logs when hard stop conditions are triggered
+hard_stop_rule = error_handler.check_hard_stop_conditions(response)
+if hard_stop_rule:
+    error_logger.log_error(response, {
+        "context": "hard_stop_condition",
+        "hard_stop_rule": hard_stop_rule
+    })
+```
+
+### 7. Response Parsing Error Logging
+**Location**: `response_parser.py` - All parsing methods
+**Triggers**: JSON parsing errors, recategorization events, pattern matching failures
+**Log File**: `{ErrorType}_{timestamp}.log`
+
+```python
+# Logs response parsing errors
+try:
+    response_json = json.loads(response_text)
+    return self._parse_json_response(response_json, original_status)
+except json.JSONDecodeError as e:
+    error_logger.log_error(e, {
+        "context": "response_parsing",
+        "response_text": response_text[:500],
+        "original_status": original_status
+    })
+```
+
+### 8. Status Recategorization Logging
+**Location**: `response_parser.py` - Recategorization methods
+**Triggers**: When status codes are recategorized based on response content
+**Log File**: `{ErrorType}_{timestamp}.log`
+
+```python
+# Logs status recategorization events
+if self._should_apply_rule(rule, original_status, error_messages):
+    self._log_recategorization(original_status, new_status, pattern, description)
+    error_logger.log_error("Status recategorization", {
+        "context": "status_recategorization",
+        "original_status": original_status,
+        "new_status": new_status,
+        "pattern": pattern,
+        "description": description
+    })
+```
+
+### 9. Error Handler Integration
 **Location**: `error_handler.py` - All retry methods
 **Triggers**: During retry logic execution
-**Coverage**: All retry attempts, final errors, and circuit breaker events
+**Coverage**: All retry attempts, final errors, conditional retries, and hard stop events
 
 ```python
 # Automatically logs during retry operations
 error_handler.retry_with_backoff(function, context)
 ```
 
-
-
-### 8. Proxy Client Error Logging
+### 10. Proxy Client Error Logging
 **Location**: `proxy_client.py` - All exception handlers
 **Triggers**: HTTP request failures, JSON parsing errors, blank response detection
 **Coverage**: Network errors, parsing errors, response validation errors
@@ -101,7 +158,7 @@ error_handler.retry_with_backoff(function, context)
 proxy_client = ProxyClient(url, error_logger=error_logger)
 ```
 
-### 9. Request Logger Error Logging
+### 11. Request Logger Error Logging
 **Location**: `request_logger.py` - File writing operations
 **Triggers**: When log file writing fails
 **Coverage**: File system errors, permission issues
@@ -111,7 +168,7 @@ proxy_client = ProxyClient(url, error_logger=error_logger)
 request_logger = RequestLogger(config, error_logger=error_logger)
 ```
 
-### 10. Flask Error Handler Logging
+### 12. Flask Error Handler Logging
 **Location**: `main.py` - Flask error handlers
 **Triggers**: HTTP 400, 404, 500 errors
 **Coverage**: Bad requests, not found, internal server errors
@@ -124,7 +181,7 @@ def bad_request(error):
         error_logger.log_error(400, {"context": "flask_error_handler"})
 ```
 
-### 11. Configuration Validation Error Logging
+### 13. Configuration Validation Error Logging
 **Location**: `main.py` - Startup configuration validation
 **Triggers**: Invalid configuration during startup
 **Coverage**: Configuration errors, missing required settings
@@ -134,10 +191,14 @@ def bad_request(error):
 try:
     config.validate()
 except ValueError as e:
-    temp_error_logger.log_error(e, {"context": "configuration_validation"})
+    temp_error_logger.log_error(e, {
+        "context": "configuration_validation",
+        "error_type": "config_validation_error",
+        "startup_error": True
+    })
 ```
 
-### 12. JSON Parsing Error Logging
+### 14. JSON Parsing Error Logging
 **Location**: `main.py` - Chat completions endpoint
 **Triggers**: Invalid JSON in request body
 **Coverage**: Malformed JSON, encoding issues
@@ -147,10 +208,15 @@ except ValueError as e:
 try:
     request_data = request.get_json()
 except Exception as e:
-    error_logger.log_error(e, {"context": "json_parsing"})
+    error_logger.log_error(e, {
+        "context": "json_parsing",
+        "endpoint": "/chat/completions",
+        "error_type": "invalid_json",
+        "request_body": request.get_data(as_text=True)[:1000] if request else "unknown"
+    })
 ```
 
-### 13. Health Check Error Logging
+### 15. Health Check Error Logging
 **Location**: `main.py` - Health check endpoint
 **Triggers**: Errors during health check operations
 **Coverage**: Health check failures, retry configuration errors
@@ -161,10 +227,14 @@ try:
     # Health check logic
     pass
 except Exception as e:
-    error_logger.log_error(e, {"context": "health_check"})
+    error_logger.log_error(e, {
+        "context": "health_check",
+        "endpoint": "/health/detailed",
+        "error_type": "health_check_error"
+    })
 ```
 
-### 14. Endpoint-Specific Error Logging
+### 16. Endpoint-Specific Error Logging
 **Location**: `main.py` - All endpoint handlers
 **Triggers**: Errors in specific endpoints (/models, /chat/completions)
 **Coverage**: Endpoint-specific errors, request forwarding failures
@@ -175,7 +245,29 @@ try:
     # Endpoint logic
     pass
 except Exception as e:
-    error_logger.log_error(e, {"context": "models_endpoint"})
+    error_logger.log_error(e, {
+        "context": "models_endpoint",
+        "endpoint": "/models",
+        "error_type": "models_endpoint_error"
+    })
+```
+
+### 17. Regex Processing Error Logging
+**Location**: `utils.py` - Regex replacement functions
+**Triggers**: Invalid regex patterns, replacement failures
+**Coverage**: Regex compilation errors, replacement processing errors
+
+```python
+# Logs regex processing errors
+try:
+    result = re.sub(pattern, replacement, result, flags=flags)
+except (re.error, TypeError, ValueError) as e:
+    error_logger.log_error(e, {
+        "context": "regex_processing",
+        "pattern": pattern,
+        "replacement": replacement,
+        "flags": flags_str
+    })
 ```
 
 ## Error Log Format
