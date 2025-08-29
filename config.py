@@ -127,6 +127,42 @@ class Config:
                     if not isinstance(apply_to, str) or apply_to.lower() not in ["all", "user", "assistant", "system"]:
                         raise ValueError(f"regex_replacement.rules[{i}].apply_to must be one of: all, user, assistant, system")
         
+        # Validate response processing configuration
+        response_processing_config = self._config.get("response_processing", {})
+        if response_processing_config:
+            if not isinstance(response_processing_config.get("enabled"), bool):
+                raise ValueError("response_processing.enabled must be a boolean value")
+            
+            if response_processing_config.get("enabled", False):
+                rules = response_processing_config.get("rules", [])
+                if not isinstance(rules, list):
+                    raise ValueError("response_processing.rules must be a list")
+                
+                for i, rule in enumerate(rules):
+                    if not isinstance(rule, dict):
+                        raise ValueError(f"response_processing.rules[{i}] must be a dictionary")
+                    
+                    pattern = rule.get("pattern")
+                    if not pattern or not isinstance(pattern, str):
+                        raise ValueError(f"response_processing.rules[{i}].pattern must be a non-empty string")
+                    
+                    replacement = rule.get("replacement", "")
+                    if not isinstance(replacement, str):
+                        raise ValueError(f"response_processing.rules[{i}].replacement must be a string")
+                    
+                    flags = rule.get("flags", "")
+                    if not isinstance(flags, str):
+                        raise ValueError(f"response_processing.rules[{i}].flags must be a string")
+                    
+                    # Validate flags contain only valid regex flags
+                    valid_flags = set("imsx")
+                    if not all(flag in valid_flags for flag in flags):
+                        raise ValueError(f"response_processing.rules[{i}].flags must contain only valid regex flags: {valid_flags}")
+                    
+                    description = rule.get("description", "")
+                    if not isinstance(description, str):
+                        raise ValueError(f"response_processing.rules[{i}].description must be a string")
+        
         return True
     
     def get_target_proxy_config(self) -> Dict[str, Any]:
@@ -154,6 +190,10 @@ class Config:
     def get_regex_replacement_config(self) -> Dict[str, Any]:
         """Get regex replacement configuration"""
         return self._config.get("regex_replacement", {})
+    
+    def get_response_processing_config(self) -> Dict[str, Any]:
+        """Get response processing configuration"""
+        return self._config.get("response_processing", {})
     
     def get_response_parsing_config(self) -> Dict[str, Any]:
         """Get response parsing configuration"""

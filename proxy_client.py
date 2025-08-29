@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 logger = logging.getLogger(__name__)
 
 
-from utils import sanitize_headers_for_logging
+from utils import sanitize_headers_for_logging, process_response_with_regex
 from constants import SKIP_HEADERS, BLANK_RESPONSE_PATTERNS
 from response_parser import ResponseParser
 
@@ -103,6 +103,21 @@ class ProxyClient:
                         # If it's now an error status, raise HTTPError to trigger retry logic
                         if new_status >= 400:
                             response.raise_for_status()
+                
+                # Apply response processing rules if enabled
+                if self.config and hasattr(self.config, 'get_response_processing_config'):
+                    response_processing_config = self.config.get_response_processing_config()
+                    logger.info(f"Response processing config: {response_processing_config}")
+                    if response_processing_config.get("enabled", False):
+                        rules = response_processing_config.get("rules", [])
+                        logger.info(f"Response processing rules: {rules}")
+                        if rules:
+                            logger.info(f"Applying response processing rules ({len(rules)} rules)")
+                            original_response = response_json.copy()
+                            response_json = process_response_with_regex(response_json, rules)
+                            logger.info(f"Response processing completed")
+                else:
+                    logger.info("Response processing config not available or config object missing")
                 
                 # Check for blank content in chat completions
                 if self._is_blank_response(response_json):

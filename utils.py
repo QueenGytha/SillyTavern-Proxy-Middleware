@@ -150,9 +150,15 @@ def process_messages_with_regex(messages: List[Dict[str, Any]], rules: List[Dict
     if not messages or not rules:
         return messages
     
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"=== OUTGOING REGEX PROCESSING ===")
+    logger.info(f"Applying {len(rules)} rules to {len(messages)} messages")
+    logger.info(f"TEST LOG MESSAGE - OUTGOING REGEX PROCESSING IS WORKING")
+    
     processed_messages = []
     
-    for message in messages:
+    for i, message in enumerate(messages):
         role = message.get("role", "").lower()
         content = message.get("content", "")
         
@@ -167,12 +173,71 @@ def process_messages_with_regex(messages: List[Dict[str, Any]], rules: List[Dict
             if apply_to == "all" or apply_to == role:
                 applicable_rules.append(rule)
         
+        # Log before processing
+        logger.info(f"Message {i+1} ({role}) BEFORE regex: {content[:200]}...")
+        
         # Apply regex replacements
         processed_content = apply_regex_replacements(content, applicable_rules)
+        
+        # Log after processing
+        logger.info(f"Message {i+1} ({role}) AFTER regex: {processed_content[:200]}...")
         
         # Create new message with processed content
         processed_message = message.copy()
         processed_message["content"] = processed_content
         processed_messages.append(processed_message)
     
+    logger.info(f"=== OUTGOING REGEX PROCESSING COMPLETE ===")
     return processed_messages
+
+
+def process_response_with_regex(response_data: Dict[str, Any], rules: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Process response data with regex replacement rules
+    
+    Args:
+        response_data: Response dictionary (typically OpenAI format)
+        rules: List of replacement rules
+        
+    Returns:
+        Response data with replacements applied
+    """
+    if not response_data or not rules:
+        return response_data
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"=== INCOMING REGEX PROCESSING ===")
+    logger.info(f"Applying {len(rules)} rules to response")
+    logger.info(f"TEST LOG MESSAGE - INCOMING REGEX PROCESSING IS WORKING")
+    
+    # Create a copy to avoid modifying the original
+    processed_response = response_data.copy()
+    
+    # Process choices if they exist
+    if 'choices' in processed_response and isinstance(processed_response['choices'], list):
+        processed_choices = []
+        for i, choice in enumerate(processed_response['choices']):
+            processed_choice = choice.copy()
+            
+            # Process message content if it exists
+            if 'message' in processed_choice and isinstance(processed_choice['message'], dict):
+                message = processed_choice['message'].copy()
+                if 'content' in message and isinstance(message['content'], str):
+                    # Log before processing
+                    logger.info(f"Choice {i+1} BEFORE regex: {message['content'][:200]}...")
+                    
+                    # Apply regex replacements to content
+                    processed_content = apply_regex_replacements(message['content'], rules)
+                    message['content'] = processed_content
+                    
+                    # Log after processing
+                    logger.info(f"Choice {i+1} AFTER regex: {processed_content[:200]}...")
+                processed_choice['message'] = message
+            
+            processed_choices.append(processed_choice)
+        
+        processed_response['choices'] = processed_choices
+    
+    logger.info(f"=== INCOMING REGEX PROCESSING COMPLETE ===")
+    return processed_response

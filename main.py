@@ -352,7 +352,9 @@ def chat_completions():
                     response_data, None, start_time, end_time, duration
                 )
             
-            return jsonify(response_data)
+            response = jsonify(response_data)
+            response.headers['Content-Type'] = 'application/json; charset=utf-8'
+            return response
         except Exception as e:
             end_time = time.time()
             duration = end_time - start_time
