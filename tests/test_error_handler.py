@@ -6,11 +6,11 @@ from requests.exceptions import RequestException, Timeout, ConnectionError, HTTP
 import sys
 import os
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add src directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
 # Import the error handler
-from error_handler import ErrorHandler
+from first_hop_proxy.error_handler import ErrorHandler
 
 class TestErrorHandler:
     """Test suite for error handling and retry logic"""
@@ -334,7 +334,7 @@ class TestErrorHandler:
                 raise HTTPError("502 Bad Gateway")
             return {"choices": [{"message": {"content": "Success"}}]}
         
-        with patch('error_handler.logger') as mock_logger:
+        with patch('first_hop_proxy.error_handler.logger') as mock_logger:
             # error_handler.retry_with_backoff(mock_function)
             
             # Verify retry attempts were logged

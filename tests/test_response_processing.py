@@ -3,7 +3,13 @@ Tests for response processing functionality
 """
 import unittest
 import json
-from utils import process_response_with_regex
+import sys
+import os
+
+# Add src directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+
+from first_hop_proxy.utils import process_response_with_regex
 
 
 class TestResponseProcessing(unittest.TestCase):

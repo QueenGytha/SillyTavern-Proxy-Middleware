@@ -7,10 +7,10 @@ import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
 # Import the proxy client
-from proxy_client import ProxyClient
+from first_hop_proxy.proxy_client import ProxyClient
 
 class TestProxyClient:
     """Test suite for the proxy client functionality"""

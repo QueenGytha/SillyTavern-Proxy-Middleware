@@ -6,10 +6,10 @@ from unittest.mock import Mock, patch
 import sys
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
 # Import the error logger
-from error_logger import ErrorLogger
+from first_hop_proxy.error_logger import ErrorLogger
 
 
 class TestErrorLogger:

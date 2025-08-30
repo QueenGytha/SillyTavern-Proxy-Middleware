@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from typing import Dict, Any, Optional, Tuple
-from config import Config
+from .config import Config
 
 logger = logging.getLogger(__name__)
 

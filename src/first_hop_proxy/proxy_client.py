@@ -8,9 +8,9 @@ from urllib.parse import urljoin
 logger = logging.getLogger(__name__)
 
 
-from utils import sanitize_headers_for_logging, process_response_with_regex
-from constants import SKIP_HEADERS, BLANK_RESPONSE_PATTERNS
-from response_parser import ResponseParser
+from .utils import sanitize_headers_for_logging, process_response_with_regex
+from .constants import SKIP_HEADERS, BLANK_RESPONSE_PATTERNS
+from .response_parser import ResponseParser
 
 
 class ProxyClient:

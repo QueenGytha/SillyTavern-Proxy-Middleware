@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any, Optional
 import logging
-from utils import sanitize_headers_for_logging
+from .utils import sanitize_headers_for_logging
 
 logger = logging.getLogger(__name__)
 

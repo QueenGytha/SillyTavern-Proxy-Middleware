@@ -2,7 +2,7 @@ import yaml
 import os
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional
-from constants import DEFAULT_CONFIG
+from .constants import DEFAULT_CONFIG
 
 
 class Config:

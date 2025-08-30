@@ -3,7 +3,7 @@ Utility functions for the seaking-proxy middleware
 """
 import re
 from typing import Dict, Any, List
-from constants import SENSITIVE_HEADERS
+from .constants import SENSITIVE_HEADERS
 
 
 def sanitize_headers_for_logging(headers: Dict[str, Any]) -> Dict[str, Any]:
