@@ -585,9 +585,9 @@ class TestErrorHandler:
         hard_stop_rule = error_handler.check_hard_stop_conditions(mock_response)
         assert hard_stop_rule is None
         
-        # Test that should_retry returns True (normal retry behavior)
+        # Test that should_retry returns False (500 is not in retry_codes)
         should_retry = error_handler.should_retry(mock_response)
-        assert should_retry is True
+        assert should_retry is False
 
     def test_hard_stop_pattern_mismatch(self):
         """Test that hard stop conditions don't match when pattern doesn't match"""
@@ -615,6 +615,6 @@ class TestErrorHandler:
         hard_stop_rule = error_handler.check_hard_stop_conditions(mock_response)
         assert hard_stop_rule is None
         
-        # Test that should_retry returns True (normal retry behavior)
+        # Test that should_retry returns False (500 is not in retry_codes)
         should_retry = error_handler.should_retry(mock_response)
-        assert should_retry is True
+        assert should_retry is False

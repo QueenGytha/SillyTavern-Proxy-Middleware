@@ -23,21 +23,18 @@ class ErrorHandler:
     """Error handling and retry logic for the proxy middleware"""
     
     def __init__(self, max_retries: int = 10, base_delay: float = 1.0, max_delay: float = 60.0, 
-                 error_logger=None, hard_stop_config=None):
+                 error_logger=None, hard_stop_config=None, retry_codes=None, fail_codes=None, conditional_retry_codes=None):
         """Initialize error handler with retry settings"""
         self.max_retries = max_retries
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.error_logger = error_logger
         
-        # Extended retry codes for future-proofing
-        self.retry_codes = [429, 500, 502, 503, 504, 505, 507, 508, 511, 408, 409, 410, 423, 424, 425, 426, 428, 431, 451]
-        
-        # Extended fail codes for client errors
-        self.fail_codes = [400, 401, 403, 405, 406, 407, 411, 412, 413, 414, 415, 416, 417, 418, 421, 422]
-        
-        # Conditional retry codes - might be retryable depending on context
-        self.conditional_retry_codes = [404, 411, 412, 413, 414, 416, 417, 418, 421, 423, 424, 425, 426, 428, 431, 451]
+        # Use provided codes or defaults from constants
+        from .constants import RETRY_CODES, FAIL_CODES, CONDITIONAL_RETRY_CODES
+        self.retry_codes = retry_codes or RETRY_CODES
+        self.fail_codes = fail_codes or FAIL_CODES
+        self.conditional_retry_codes = conditional_retry_codes or CONDITIONAL_RETRY_CODES
         
         # Conditional retry settings
         self.conditional_retry_enabled = True
@@ -128,6 +125,7 @@ class ErrorHandler:
     
     def should_retry_exception(self, exception: Exception) -> bool:
         """Determine if an exception should be retried"""
+        
         # Network-level retryable exceptions
         network_retryable = (
             Timeout, ConnectionError, RequestException,
@@ -153,14 +151,19 @@ class ErrorHandler:
             json.JSONDecodeError
         )
         
-        # Check if it's a retryable exception type
-        if isinstance(exception, network_retryable + ssl_retryable + content_retryable):
-            return True
-        
-        # Check HTTPError with retryable status codes
+        # Check HTTPError with status codes FIRST (before network_retryable)
         if isinstance(exception, HTTPError):
             if hasattr(exception, 'response') and exception.response is not None:
-                return exception.response.status_code in self.retry_codes
+                status_code = exception.response.status_code
+                # Don't retry if it's a permanent failure
+                if status_code in self.fail_codes:
+                    return False
+                # Retry if it's a retryable status code
+                return status_code in self.retry_codes
+        
+        # Check if it's a retryable exception type (but exclude HTTPError since we handled it above)
+        if isinstance(exception, network_retryable + ssl_retryable + content_retryable):
+            return True
         
         # Check for specific non-retryable exceptions
         non_retryable = (

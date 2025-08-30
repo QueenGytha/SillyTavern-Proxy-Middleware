@@ -353,23 +353,8 @@ grep -r "ValueError" logs/errors/
 ### Error Log Summary
 Access error log summary via API:
 ```bash
-curl http://localhost:8765/logs/errors
-```
-
-Response:
-```json
-{
-  "error_logs": [
-    {
-      "filename": "ValueError_20250830_035213_346.log",
-      "error_code": "ValueError",
-      "size_bytes": 600,
-      "created": "2025-08-30T03:52:13.346929",
-      "modified": "2025-08-30T03:52:13.346929"
-    }
-  ],
-  "total_errors": 1
-}
+ls -la logs/errors/
+tail -f logs/errors/*.log
 ```
 
 ### Error Log Cleanup
@@ -443,8 +428,8 @@ ls -la logs/errors/
 # Monitor error logs in real-time
 tail -f logs/errors/*.log
 
-# Check error log summary
-curl http://localhost:8765/logs/errors
+# Check error log directory
+ls -la logs/errors/
 
 # Test error logging
 python3 test_error_logging.py

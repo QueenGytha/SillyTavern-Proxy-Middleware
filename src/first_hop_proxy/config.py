@@ -1,9 +1,11 @@
 import yaml
 import os
+import logging
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional
 from .constants import DEFAULT_CONFIG
 
+logger = logging.getLogger(__name__)
 
 class Config:
     """Configuration management for the proxy middleware"""
@@ -11,6 +13,35 @@ class Config:
     def __init__(self):
         """Initialize configuration with minimal defaults"""
         self._config = DEFAULT_CONFIG.copy()
+        
+        # Check if we're in test mode and override settings
+        self._apply_test_overrides()
+    
+    def _apply_test_overrides(self):
+        """Apply test-specific overrides when TEST_MODE is enabled"""
+        if os.environ.get('TEST_MODE', '').lower() == 'true':
+            logger.info("Test mode detected - applying test overrides")
+            
+            # Override retry settings for fast test execution
+            if 'error_handling' not in self._config:
+                self._config['error_handling'] = {}
+            
+            self._config['error_handling'].update({
+                'max_retries': int(os.environ.get('MAX_RETRIES', '1')),
+                'base_delay': float(os.environ.get('BASE_DELAY', '0.1')),
+                'max_delay': float(os.environ.get('MAX_DELAY', '1.0')),
+                'conditional_retry_enabled': os.environ.get('CONDITIONAL_RETRY_ENABLED', 'false').lower() == 'true'
+            })
+            
+            # Override timeout settings
+            if 'target_proxy' not in self._config:
+                self._config['target_proxy'] = {}
+            
+            self._config['target_proxy']['timeout'] = int(os.environ.get('PROXY_TIMEOUT', '5'))
+            
+            logger.info(f"Test overrides applied: max_retries={self._config['error_handling']['max_retries']}, "
+                       f"base_delay={self._config['error_handling']['base_delay']}, "
+                       f"max_delay={self._config['error_handling']['max_delay']}")
     
     def load_from_file(self, filename: str) -> None:
         """Load configuration from YAML file"""

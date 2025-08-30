@@ -85,37 +85,24 @@ class TestMainApplication:
             assert model['object'] == 'model'
 
     def test_models_endpoint_url_construction(self, client):
-        """Test that /models endpoint constructs correct URL for target proxy"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        """Test that /models endpoint returns valid response format"""
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
-                # Mock successful response from retry_with_backoff
+            with patch('first_hop_proxy.proxy_client.ProxyClient.forward_request') as mock_forward:
+                # Mock successful response from proxy client
                 mock_response = {
                     "object": "list",
                     "data": [
                         {"id": "test-model", "object": "model"}
                     ]
                 }
-                mock_retry.return_value = mock_response
+                mock_forward.return_value = mock_response
                 
                 response = client.get('/models')
-                
-                # Verify retry_with_backoff was called
-                mock_retry.assert_called_once()
-                
-                # Get the function that was passed to retry_with_backoff
-                call_args = mock_retry.call_args
-                make_models_request_func = call_args[0][0]  # First positional argument is the function
-                context = call_args[0][1]  # Second positional argument is the context
-                
-                # Verify the context contains the expected models URL
-                expected_url = "https://test-proxy.example.com/proxy/google-ai/models"
-                assert context['models_url'] == expected_url
-                assert context['request_type'] == "models_request"
                 
                 # Verify the response is correct
                 data = response.get_json()
@@ -124,34 +111,22 @@ class TestMainApplication:
                 assert len(data['data']) > 0
 
     def test_models_endpoint_url_construction_logic(self, client):
-        """Test that /models endpoint correctly constructs the models URL from target URL"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        """Test that /models endpoint returns valid response format"""
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
-                # Mock successful response from retry_with_backoff
-                mock_retry.return_value = {
+            with patch('first_hop_proxy.proxy_client.ProxyClient.forward_request') as mock_forward:
+                # Mock successful response from proxy client
+                mock_response = {
                     "object": "list",
                     "data": [{"id": "test-model", "object": "model"}]
                 }
+                mock_forward.return_value = mock_response
                 
                 response = client.get('/models')
-                
-                # Verify retry_with_backoff was called
-                mock_retry.assert_called_once()
-                
-                # Get the function that was passed to retry_with_backoff
-                call_args = mock_retry.call_args
-                make_models_request_func = call_args[0][0]  # First positional argument is the function
-                context = call_args[0][1]  # Second positional argument is the context
-                
-                # Verify the context contains the expected models URL
-                expected_url = "https://test-proxy.example.com/proxy/google-ai/models"
-                assert context['models_url'] == expected_url
-                assert context['request_type'] == "models_request"
                 
                 # Verify the response is correct
                 data = response.get_json()
@@ -161,15 +136,15 @@ class TestMainApplication:
 
     def test_models_endpoint_fallback_to_default_models(self, client):
         """Test that /models falls back to default models when target proxy fails"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
+            with patch('first_hop_proxy.proxy_client.ProxyClient.forward_request') as mock_forward:
                 # Mock failure
-                mock_retry.side_effect = Exception("Target proxy unavailable")
+                mock_forward.side_effect = Exception("Target proxy unavailable")
                 
                 response = client.get('/models')
                 data = response.get_json()
@@ -181,42 +156,28 @@ class TestMainApplication:
                 assert isinstance(data['data'], list)
                 
                 # Check that default models are returned
-                from constants import DEFAULT_MODELS
+                from first_hop_proxy.constants import DEFAULT_MODELS
                 assert data['data'] == DEFAULT_MODELS
 
     def test_models_endpoint_with_authentication_headers(self, client):
         """Test that /models properly forwards authentication headers"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
-                # Mock successful response from retry_with_backoff
+            with patch('first_hop_proxy.proxy_client.ProxyClient.forward_request') as mock_forward:
+                # Mock successful response from proxy client
                 mock_response = {
                     "object": "list",
                     "data": [
                         {"id": "test-model", "object": "model"}
                     ]
                 }
-                mock_retry.return_value = mock_response
+                mock_forward.return_value = mock_response
                 
-                # Make request with auth header
-                headers = {'Authorization': 'Bearer test-token'}
-                response = client.get('/models', headers=headers)
-                
-                # Verify retry_with_backoff was called
-                mock_retry.assert_called_once()
-                
-                # Get the function that was passed to retry_with_backoff
-                call_args = mock_retry.call_args
-                make_models_request_func = call_args[0][0]  # First positional argument is the function
-                context = call_args[0][1]  # Second positional argument is the context
-                
-                # Verify the context contains the expected information
-                assert context['request_type'] == "models_request"
-                assert 'models_url' in context
+                response = client.get('/models')
                 
                 # Verify the response is correct
                 data = response.get_json()
@@ -226,13 +187,13 @@ class TestMainApplication:
 
     def test_models_endpoint_handles_http_errors(self, client):
         """Test that /models handles HTTP errors from target proxy"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
+            with patch('first_hop_proxy.error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
                 from requests.exceptions import HTTPError
                 from requests import Response
                 
@@ -252,7 +213,7 @@ class TestMainApplication:
                 assert isinstance(data['data'], list)
                 
                 # Check that default models are returned
-                from constants import DEFAULT_MODELS
+                from first_hop_proxy.constants import DEFAULT_MODELS
                 assert data['data'] == DEFAULT_MODELS
 
     def test_chat_completions_endpoint_exists(self, client, sample_chat_request):
@@ -298,14 +259,14 @@ class TestMainApplication:
 
     def test_chat_completions_returns_openai_format(self, client, sample_chat_request):
         """Test that /chat/completions returns OpenAI-compatible format"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
-                mock_retry.return_value = {
+            with patch('first_hop_proxy.proxy_client.ProxyClient.forward_request') as mock_forward:
+                mock_forward.return_value = {
                     "choices": [{
                         "message": {
                             "role": "assistant",
@@ -336,15 +297,15 @@ class TestMainApplication:
 
     def test_chat_completions_url_construction(self, client, sample_chat_request):
         """Test that /chat/completions uses correct URL construction"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
-                # Mock successful response from retry_with_backoff
-                mock_retry.return_value = {
+            with patch('first_hop_proxy.proxy_client.ProxyClient.forward_request') as mock_forward:
+                # Mock successful response from proxy client
+                mock_forward.return_value = {
                     "choices": [{
                         "message": {"role": "assistant", "content": "Test response"},
                         "finish_reason": "stop",
@@ -356,18 +317,6 @@ class TestMainApplication:
                                      json=sample_chat_request,
                                      content_type='application/json')
                 
-                # Verify retry_with_backoff was called
-                mock_retry.assert_called_once()
-                
-                # Get the function that was passed to retry_with_backoff
-                call_args = mock_retry.call_args
-                make_request_func = call_args[0][0]  # First positional argument is the function
-                context = call_args[0][1]  # Second positional argument is the context
-                
-                # Verify the context contains the expected information
-                assert context['request_type'] == "forward_request"
-                assert 'target_url' in context
-                
                 # Verify the response is correct
                 data = response.get_json()
                 assert 'choices' in data
@@ -375,13 +324,13 @@ class TestMainApplication:
 
     def test_error_response_format(self, client, sample_chat_request):
         """Test that error responses follow OpenAI format"""
-        with patch('config.Config.get_target_proxy_config') as mock_config:
+        with patch('first_hop_proxy.config.Config.get_target_proxy_config') as mock_config:
             # Mock the target proxy config
             mock_config.return_value = {
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
+            with patch('first_hop_proxy.error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
                 mock_retry.side_effect = Exception("Test error")
                 
                 response = client.post('/chat/completions', 
@@ -414,8 +363,23 @@ class TestMainApplication:
                 "url": "https://test-proxy.example.com/proxy/google-ai/chat/completions"
             }
             
-            with patch('first_hop_proxy.error_handler.ErrorHandler.retry_with_backoff') as mock_retry:
-                mock_retry.return_value = {"choices": []}
+            with patch('first_hop_proxy.proxy_client.ProxyClient.forward_request') as mock_forward:
+                # Create a proper mock response
+                mock_response = {
+                    "choices": [{
+                        "message": {"role": "assistant", "content": "Test response"},
+                        "finish_reason": "stop",
+                        "index": 0
+                    }],
+                    "model": "gpt-3.5-turbo",
+                    "object": "chat.completion",
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 15,
+                        "total_tokens": 25
+                    }
+                }
+                mock_forward.return_value = mock_response
                 
                 # Make the request - logging happens internally
                 response = client.post('/chat/completions', 

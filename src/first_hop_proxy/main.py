@@ -58,13 +58,24 @@ def forward_request(request_data: Dict[str, Any], headers: Optional[Dict[str, st
         max_retries = error_config.get("max_retries", 10)
         base_delay = error_config.get("base_delay", 1.0)
         max_delay = error_config.get("max_delay", 60.0)
+        retry_codes = error_config.get("retry_codes", [429, 502, 503, 504])
+        fail_codes = error_config.get("fail_codes", [400, 401, 403])
+        conditional_retry_codes = error_config.get("conditional_retry_codes", [404, 411, 412])
         
         # Get hard stop configuration
         hard_stop_config = error_config.get("hard_stop_conditions", {})
         
         # Create error handler with configuration and error logger
-        error_handler = ErrorHandler(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay, 
-                                   error_logger=error_logger, hard_stop_config=hard_stop_config)
+        error_handler = ErrorHandler(
+            max_retries=max_retries, 
+            base_delay=base_delay, 
+            max_delay=max_delay, 
+            error_logger=error_logger, 
+            hard_stop_config=hard_stop_config,
+            retry_codes=retry_codes,
+            fail_codes=fail_codes,
+            conditional_retry_codes=conditional_retry_codes
+        )
         
         # Create proxy client
         proxy_client = ProxyClient(target_url, config=config)
@@ -143,12 +154,23 @@ def models_endpoint():
         max_retries = error_config.get("max_retries", 10)
         base_delay = error_config.get("base_delay", 1.0)
         max_delay = error_config.get("max_delay", 60.0)
+        retry_codes = error_config.get("retry_codes", [429, 502, 503, 504])
+        fail_codes = error_config.get("fail_codes", [400, 401, 403])
+        conditional_retry_codes = error_config.get("conditional_retry_codes", [404, 411, 412])
         
         # Get hard stop configuration
         hard_stop_config = error_config.get("hard_stop_conditions", {})
         
-        models_error_handler = ErrorHandler(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay, 
-                                         error_logger=error_logger, hard_stop_config=hard_stop_config)
+        models_error_handler = ErrorHandler(
+            max_retries=max_retries, 
+            base_delay=base_delay, 
+            max_delay=max_delay, 
+            error_logger=error_logger, 
+            hard_stop_config=hard_stop_config,
+            retry_codes=retry_codes,
+            fail_codes=fail_codes,
+            conditional_retry_codes=conditional_retry_codes
+        )
         
         # Define the models request function
         def make_models_request():
@@ -178,6 +200,7 @@ def models_endpoint():
             "object": "list",
             "data": DEFAULT_MODELS
         })
+
 
 
 @app.route('/chat/completions', methods=['POST'])

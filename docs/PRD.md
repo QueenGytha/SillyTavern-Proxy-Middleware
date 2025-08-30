@@ -69,7 +69,7 @@ first-hop-proxy/
 - **GET /models**: Return available models
 - **GET /health**: Basic health check
 - **GET /health/detailed**: Detailed health check with configuration
-- **GET /logs/errors**: Error logs summary
+
 
 #### 3.1.2 Request Forwarding
 - Forward requests to configurable target proxy
@@ -256,10 +256,7 @@ first-hop-proxy/
 **Response Format**: Detailed health status with configuration
 **Error Handling**: Return detailed status or error
 
-#### 7.1.5 GET /logs/errors
-**Request Format**: Standard GET request
-**Response Format**: Error logs summary
-**Error Handling**: Return error summary or error
+
 
 ### 7.2 Configuration Format
 ```yaml
